@@ -94,9 +94,6 @@ def fix_swapped_channel_issue(data: list) -> None:
     """Inplace handle the swapped channel issue.
     Basically "sometimes" the left_blink and right_blink
     were swapped and this swaps them back.
-
-    Note: It's also possible that XY got swapped instead,
-          and this script does not handle that case correctly.
     """
     for video_idx, video_data in enumerate(data):
         left_x_nan = numpy.isnan(video_data[1])

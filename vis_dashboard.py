@@ -57,9 +57,9 @@ def plot_gaze_heatmaps(all_data):
             all_x.append(gaze_x[valid])
             all_y.append(gaze_y[valid])
 
-        all_x = numpy.concatenate(all_x)
-        all_y = numpy.concatenate(all_y)
-        ax.hist2d(all_x, all_y, bins=50, cmap="hot")
+        all_x = numpy.concatenate(all_x) % 360  # wrap negatives into 0-360
+        all_y = numpy.concatenate(all_y) % 180  # wrap negatives into 0-180
+        ax.hist2d(all_x, all_y, bins=50, range=[[0, 360], [0, 180]], cmap="hot")
         ax.set_title(mapping.get_str_code(video_idx, "eye"), fontsize=9)
         ax.tick_params(labelsize=6)
 
@@ -159,18 +159,63 @@ def plot_vergence_boxplots(all_data):
 
     ax1.boxplot(x_verg_per_video, showfliers=False)
     ax1.set_xticklabels(labels, rotation=45, fontsize=8)
-    ax1.set_title("X Vergence (Left_X − Right_X)")
+    ax1.set_title("Horizontal Vergence (Left_X − Right_X)")
     ax1.set_ylabel("Raw coordinate difference")
 
     ax2.boxplot(y_verg_per_video, showfliers=False)
     ax2.set_xticklabels(labels, rotation=45, fontsize=8)
-    ax2.set_title("Y Vergence (Left_Y − Right_Y)")
+    ax2.set_title("Vertical Vergence (Left_Y − Right_Y)")
     ax2.set_ylabel("Raw coordinate difference")
 
     fig.tight_layout()
     fig.savefig("vis5_vergence_boxplots.png")
     plt.close(fig)
     logger.info("Saved vis5_vergence_boxplots.png")
+
+
+def plot_vergence_per_user(all_data):
+    """Chart 3b: Left vs Right eye vergence box plots per user (all videos pooled)."""
+    user_ids = list(USER_RANGE)
+    x_verg_per_user = []
+    y_verg_per_user = []
+
+    for user_id in user_ids:
+        ux = []
+        uy = []
+        for video_idx in range(NUM_VIDEOS):
+            vdata = all_data[user_id][video_idx]
+            if vdata is None:
+                continue
+            dx = vdata[1] - vdata[4]  # Left_X - Right_X
+            dy = vdata[2] - vdata[5]  # Left_Y - Right_Y
+            valid_x = ~numpy.isnan(dx)
+            valid_y = ~numpy.isnan(dy)
+            ux.append(dx[valid_x])
+            uy.append(dy[valid_y])
+        if ux:
+            x_verg_per_user.append(numpy.concatenate(ux))
+            y_verg_per_user.append(numpy.concatenate(uy))
+        else:
+            x_verg_per_user.append(numpy.array([]))
+            y_verg_per_user.append(numpy.array([]))
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12.8, 7.2), dpi=150)
+    fig.suptitle("Left–Right Eye Vergence by User (all videos pooled)")
+
+    ax1.boxplot(x_verg_per_user, showfliers=False)
+    ax1.set_xticklabels([str(uid) for uid in user_ids], rotation=90, fontsize=6)
+    ax1.set_title("Horizontal Vergence (Left_X − Right_X)")
+    ax1.set_ylabel("Raw coordinate difference")
+
+    ax2.boxplot(y_verg_per_user, showfliers=False)
+    ax2.set_xticklabels([str(uid) for uid in user_ids], rotation=90, fontsize=6)
+    ax2.set_title("Vertical Vergence (Left_Y − Right_Y)")
+    ax2.set_ylabel("Raw coordinate difference")
+
+    fig.tight_layout()
+    fig.savefig("vis5_vergence_per_user.png")
+    plt.close(fig)
+    logger.info("Saved vis5_vergence_per_user.png")
 
 
 def plot_user_gaze_boxplots(all_data):
@@ -243,6 +288,55 @@ def plot_velocity_histograms(all_data):
     logger.info("Saved vis5_velocity_histograms.png")
 
 
+def plot_gaze_percentile_bands(all_data):
+    """Chart 6: Gaze position over time with percentile bands, one plot per video."""
+    for video_idx in range(NUM_VIDEOS):
+        video_code = mapping.get_str_code(video_idx, "eye")
+        user_traces_x = []
+        user_traces_y = []
+
+        for user_id in USER_RANGE:
+            vdata = all_data[user_id][video_idx]
+            if vdata is None:
+                continue
+            gaze_x = numpy.nanmean([vdata[1], vdata[4]], axis=0)
+            gaze_y = numpy.nanmean([vdata[2], vdata[5]], axis=0)
+            user_traces_x.append((vdata[0], gaze_x))
+            user_traces_y.append((vdata[0], gaze_y))
+
+        if not user_traces_x:
+            continue
+
+        # Align to the longest timestamp vector
+        longest_t = max(user_traces_x, key=lambda tr: len(tr[0]))[0]
+        n = len(longest_t)
+
+        for axis_label, traces in [("X", user_traces_x), ("Y", user_traces_y)]:
+            matrix = numpy.full((len(traces), n), numpy.nan)
+            for i, (t, vals) in enumerate(traces):
+                matrix[i, :len(vals)] = vals
+
+            def pct(p):
+                return numpy.nanpercentile(matrix, p, axis=0)
+
+            fig, ax = plt.subplots(figsize=(12.8, 7.2), dpi=150)
+            ax.fill_between(longest_t, pct(0), pct(25), alpha=0.05, linewidth=0, color="b", label="0–25 / 75–100%")
+            ax.fill_between(longest_t, pct(25), pct(40), alpha=0.4, linewidth=0, color="b", label="25–40 / 60–75%")
+            ax.fill_between(longest_t, pct(40), pct(60), alpha=0.65, linewidth=0, color="b", label="40–60%")
+            ax.fill_between(longest_t, pct(60), pct(75), alpha=0.4, linewidth=0, color="b")
+            ax.fill_between(longest_t, pct(75), pct(100), alpha=0.05, linewidth=0, color="b")
+            ax.plot(longest_t, pct(50), linewidth=0.5, color="b", label="Median")
+            ax.set_title(f"Gaze {axis_label} Over Time — {video_code}")
+            ax.set_xlabel("Time (s)")
+            ax.set_ylabel(f"Gaze {axis_label} (degrees)")
+            ax.legend()
+            fig.tight_layout()
+            fname = f"vis5_gaze_{axis_label.lower()}_percentile_{video_idx:02d}_({video_code}).png"
+            fig.savefig(fname)
+            plt.close(fig)
+            logger.info(f"Saved {fname}")
+
+
 if __name__ == "__main__":
     logger.info("Loading all user data...")
     all_data = load_all_data()
@@ -251,7 +345,9 @@ if __name__ == "__main__":
     plot_gaze_heatmaps(all_data)
     plot_blink_rate_over_time(all_data)
     plot_vergence_boxplots(all_data)
+    plot_vergence_per_user(all_data)
     plot_user_gaze_boxplots(all_data)
     plot_velocity_histograms(all_data)
+    plot_gaze_percentile_bands(all_data)
 
     logger.info("All charts generated.")
