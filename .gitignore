@@ -1,0 +1,12 @@
+
+__pycache__
+*.png
+*.jpg
+
+# Data (large / external)
+dataset
+features.csv
+features.npz
+
+# Local notes
+activate-venv.txt
