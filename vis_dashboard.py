@@ -145,8 +145,8 @@ def plot_vergence_boxplots(all_data):
             vdata = all_data[user_id][video_idx]
             if vdata is None:
                 continue
-            dx = vdata[1] - vdata[4]  # Left_X - Right_X
-            dy = vdata[2] - vdata[5]  # Left_Y - Right_Y
+            dx =  vdata[4] - vdata[1]  #  Right_X - Left_X
+            dy = vdata[5] - vdata[2]  #  Right_Y - Left_Y
             valid = ~numpy.isnan(dx)
             x_verg_per_video[video_idx].extend(dx[valid].tolist())
             valid = ~numpy.isnan(dy)
