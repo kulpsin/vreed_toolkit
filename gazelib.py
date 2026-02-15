@@ -49,13 +49,13 @@ def great_circle_distance(az1, pol1, az2, pol2):
     cos_pol1 = numpy.cos(pol1)
     cos_pol2 = numpy.cos(pol2)
 
-    # Vincenty numerator
-    term1 = cos_pol2 * numpy.sin(d_az)
-    term2 = cos_pol1 * sin_pol2 - sin_pol1 * cos_pol2 * cos_d_az
+    # Vincenty numerator (polar angle convention: sin↔cos swapped vs latitude)
+    term1 = sin_pol2 * numpy.sin(d_az)
+    term2 = sin_pol1 * cos_pol2 - cos_pol1 * sin_pol2 * cos_d_az
     numer = numpy.sqrt(term1**2 + term2**2)
 
-    # Vincenty denominator
-    denom = sin_pol1 * sin_pol2 + cos_pol1 * cos_pol2 * cos_d_az
+    # Vincenty denominator (polar angle convention)
+    denom = cos_pol1 * cos_pol2 + sin_pol1 * sin_pol2 * cos_d_az
 
     return numpy.rad2deg(numpy.arctan2(numer, denom))
 
