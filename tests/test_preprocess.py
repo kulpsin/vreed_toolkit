@@ -146,6 +146,83 @@ class TestNormalizeCoordinates:
         np.testing.assert_almost_equal(data[0][2, 0], 160.0)  # 360 - 200
         np.testing.assert_almost_equal(data[0][1, 0], 180.0)  # 0 + 180
 
+    # Parametrized edge cases for azimuth normalization.
+    # Only azimuth is out of range; polar is a valid 90.0.
+    @pytest.mark.parametrize("az_in, az_out", [
+        (-10.0, 350.0),       # negative azimuth wraps
+        (-180.0, 180.0),      # negative half-turn
+        (-360.0, 0.0),        # negative full turn
+        (-350.0, 10.0),       # nearly full negative turn
+        (360.0, 0.0),         # exactly 360 wraps to 0
+        (361.0, 1.0),         # just over 360
+        (720.0, 0.0),         # double full turn
+        (540.0, 180.0),       # one and a half turns
+    ])
+    def test_azimuth_edge_cases(self, az_in, az_out):
+        data = make_data_list(left_xy=(az_in, 90.0), right_xy=(az_in, 90.0))
+        preprocess.normalize_coordinates(data)
+        np.testing.assert_almost_equal(data[0][1, 0], az_out)
+        np.testing.assert_almost_equal(data[0][4, 0], az_out)
+        # Polar should remain 90
+        np.testing.assert_almost_equal(data[0][2, 0], 90.0)
+
+    # Parametrized edge cases for polar normalization.
+    # Azimuth is 100.0 (non-zero to avoid NaN issues with 0.0).
+    # When polar reflects, azimuth gets +180.
+    @pytest.mark.parametrize("pol_in, pol_out, az_in, az_out", [
+        # Polar in valid range — no reflection, azimuth unchanged
+        (0.0, 0.0, 100.0, 100.0),          # polar = 0 (north pole)
+        (1.0, 1.0, 100.0, 100.0),          # just above 0
+        (179.0, 179.0, 100.0, 100.0),      # just below 180
+        # Polar at/above 180 — reflection triggers
+        (180.0, 180.0, 100.0, 100.0),      # exactly 180: mod→180, not in (180,360)
+        (181.0, 179.0, 100.0, 280.0),      # just over 180: reflect, az += 180
+        (270.0, 90.0, 100.0, 280.0),       # three-quarter turn
+        (359.0, 1.0, 100.0, 280.0),        # nearly 360
+        # Negative polar — mod 360 first, then reflect if needed
+        (-1.0, 1.0, 100.0, 280.0),         # -1 mod 360 = 359 → reflect → 1
+        (-10.0, 10.0, 100.0, 280.0),       # -10 mod 360 = 350 → reflect → 10
+        (-90.0, 90.0, 100.0, 280.0),       # -90 mod 360 = 270 → reflect → 90
+        (-179.0, 179.0, 100.0, 280.0),     # -179 mod 360 = 181 → reflect → 179
+        (-180.0, 180.0, 100.0, 100.0),     # -180 mod 360 = 180, not in (180,360)
+        # Large values
+        (360.0, 0.0, 100.0, 100.0),        # full turn mod → 0
+        (361.0, 1.0, 100.0, 100.0),        # 361 mod 360 = 1, valid
+        (540.0, 180.0, 100.0, 100.0),      # 540 mod 360 = 180, not reflected
+        (541.0, 179.0, 100.0, 280.0),      # 541 mod 360 = 181 → reflect
+    ])
+    def test_polar_edge_cases(self, pol_in, pol_out, az_in, az_out):
+        data = make_data_list(left_xy=(az_in, pol_in), right_xy=(az_in, pol_in))
+        preprocess.normalize_coordinates(data)
+        np.testing.assert_almost_equal(data[0][2, 0], pol_out)
+        np.testing.assert_almost_equal(data[0][5, 0], pol_out)
+        np.testing.assert_almost_equal(data[0][1, 0], az_out)
+
+    def test_both_eyes_normalized_independently(self):
+        """Left and right eye can have different out-of-range values."""
+        data = [make_video_data(left_xy=(370.0, -5.0), right_xy=(-10.0, 200.0))]
+        data += [make_video_data() for _ in range(11)]
+        preprocess.normalize_coordinates(data)
+        # Left eye: az 370→10, polar -5 mod 360=355→reflect→5, az += 180→190
+        np.testing.assert_almost_equal(data[0][1, 0], 190.0)
+        np.testing.assert_almost_equal(data[0][2, 0], 5.0)
+        # Right eye: az -10→350, polar 200→reflect→160, az += 180→170
+        np.testing.assert_almost_equal(data[0][4, 0], 170.0)
+        np.testing.assert_almost_equal(data[0][5, 0], 160.0)
+
+    def test_mixed_valid_and_invalid_frames(self):
+        """Different frames in the same video can have different issues."""
+        data = [make_video_data(n_frames=3)]
+        data[0][1, :] = [180.0, 370.0, -20.0]  # azimuth: valid, >360, negative
+        data[0][2, :] = [90.0, 90.0, 90.0]     # polar: all valid
+        data[0][4, :] = [180.0, 370.0, -20.0]
+        data[0][5, :] = [90.0, 90.0, 90.0]
+        data += [make_video_data() for _ in range(11)]
+        preprocess.normalize_coordinates(data)
+        np.testing.assert_almost_equal(data[0][1, 0], 180.0)
+        np.testing.assert_almost_equal(data[0][1, 1], 10.0)
+        np.testing.assert_almost_equal(data[0][1, 2], 340.0)
+
 
 # --- fix_swapped_channel_issue ---
 
