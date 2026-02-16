@@ -29,6 +29,7 @@ def load_all_data():
         filename = f"{DATA_PATH}/{user_id}_EyeTracking_PreProcessed.dat"
         labels, data = preprocess.load_eye_tracking_data(filename)
         preprocess.replace_missing_values_with_nan(data)
+        preprocess.normalize_coordinates(data)
         preprocess.convert_timestamps_to_duration(data, convert_to_seconds=True)
         preprocess.fix_swapped_channel_issue(data)
         preprocess.add_empty_data(labels, data)
@@ -51,14 +52,14 @@ def plot_gaze_heatmaps(all_data):
             vdata = all_data[user_id][video_idx]
             if vdata is None:
                 continue
-            gaze_x = numpy.nanmean([vdata[1], vdata[4]], axis=0)
+            gaze_x = gazelib.circular_nanmean_pair(vdata[1], vdata[4])
             gaze_y = numpy.nanmean([vdata[2], vdata[5]], axis=0)
             valid = ~numpy.isnan(gaze_x) & ~numpy.isnan(gaze_y)
             all_x.append(gaze_x[valid])
             all_y.append(gaze_y[valid])
 
-        all_x = numpy.concatenate(all_x) % 360  # wrap negatives into 0-360
-        all_y = numpy.concatenate(all_y) % 180  # wrap negatives into 0-180
+        all_x = numpy.concatenate(all_x)
+        all_y = numpy.concatenate(all_y)
         ax.hist2d(all_x, all_y, bins=50, range=[[0, 360], [0, 180]], cmap="hot")
         ax.set_title(mapping.get_str_code(video_idx, "eye"), fontsize=9)
         ax.tick_params(labelsize=6)
@@ -231,7 +232,7 @@ def plot_user_gaze_boxplots(all_data):
             vdata = all_data[user_id][video_idx]
             if vdata is None:
                 continue
-            gx = numpy.nanmean([vdata[1], vdata[4]], axis=0)
+            gx = gazelib.circular_nanmean_pair(vdata[1], vdata[4])
             gy = numpy.nanmean([vdata[2], vdata[5]], axis=0)
             ux.append(gx[~numpy.isnan(gx)])
             uy.append(gy[~numpy.isnan(gy)])
@@ -299,7 +300,7 @@ def plot_gaze_percentile_bands(all_data):
             vdata = all_data[user_id][video_idx]
             if vdata is None:
                 continue
-            gaze_x = numpy.nanmean([vdata[1], vdata[4]], axis=0)
+            gaze_x = gazelib.circular_nanmean_pair(vdata[1], vdata[4])
             gaze_y = numpy.nanmean([vdata[2], vdata[5]], axis=0)
             user_traces_x.append((vdata[0], gaze_x))
             user_traces_y.append((vdata[0], gaze_y))

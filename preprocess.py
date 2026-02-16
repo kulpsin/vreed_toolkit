@@ -253,7 +253,7 @@ def clean_blink_boundaries(data, distance_ratio=5.0, min_distance=0.5):
         if vdata is None:
             continue
 
-        az = numpy.nanmean([vdata[1], vdata[4]], axis=0)
+        az = gazelib.circular_nanmean_pair(vdata[1], vdata[4])
         pol = numpy.nanmean([vdata[2], vdata[5]], axis=0)
         is_nan = numpy.isnan(az) | numpy.isnan(pol)
         N = len(az)

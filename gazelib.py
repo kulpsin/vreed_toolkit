@@ -15,6 +15,36 @@ vectors on the unit sphere.
 import numpy
 
 
+def circular_nanmean_pair(a, b):
+    """Circular-aware nanmean of two azimuth arrays (degrees, period 360).
+
+    When the two values straddle the 0/360 boundary (|a - b| > 180),
+    the shorter arc is used so that e.g. mean(359, 1) = 0 instead of 180.
+
+    Parameters
+    ----------
+    a, b : array_like
+        Two arrays of azimuth values in degrees.
+
+    Returns
+    -------
+    ndarray
+        Element-wise circular mean, in [0, 360).  NaN where both inputs
+        are NaN; uses the non-NaN value where only one is NaN.
+    """
+    a = numpy.asarray(a, dtype=float)
+    b = numpy.asarray(b, dtype=float)
+
+    diff = a - b
+    # Where the gap exceeds 180°, shift the smaller value up by 360
+    shift = numpy.abs(diff) > 180
+    a_shifted = numpy.where(shift & (a < b), a + 360, a)
+    b_shifted = numpy.where(shift & (b < a), b + 360, b)
+
+    result = numpy.nanmean([a_shifted, b_shifted], axis=0) % 360
+    return result
+
+
 def to_cartesian(azimuth_deg, polar_deg):
     """Convert spherical coordinates (degrees) to unit Cartesian vectors.
 
@@ -77,7 +107,7 @@ def gaze_distance(vdata):
         Great-circle distance in degrees between consecutive frames.
     """
     timestamps = vdata[0]
-    az = numpy.nanmean([vdata[1], vdata[4]], axis=0)   # mean of Left_X, Right_X
+    az = circular_nanmean_pair(vdata[1], vdata[4])       # mean of Left_X, Right_X
     pol = numpy.nanmean([vdata[2], vdata[5]], axis=0)   # mean of Left_Y, Right_Y
 
     dt = numpy.diff(timestamps)
@@ -136,7 +166,7 @@ def detect_outlier_frames(vdata, threshold=3.0):
     outliers : ndarray of bool, shape (N,)
         True for frames detected as outliers.
     """
-    az = numpy.nanmean([vdata[1], vdata[4]], axis=0)
+    az = circular_nanmean_pair(vdata[1], vdata[4])
     pol = numpy.nanmean([vdata[2], vdata[5]], axis=0)
 
     N = len(az)
@@ -204,7 +234,7 @@ def gaze_velocity_robust(vdata, threshold=3.0, fill='nan', min_dt=None):
         return timestamps_mid, velocity, outliers
 
     timestamps = vdata[0]
-    az = numpy.nanmean([vdata[1], vdata[4]], axis=0)
+    az = circular_nanmean_pair(vdata[1], vdata[4])
     pol = numpy.nanmean([vdata[2], vdata[5]], axis=0)
 
     for i in numpy.where(outliers)[0]:
