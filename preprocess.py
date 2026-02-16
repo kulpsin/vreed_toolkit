@@ -90,6 +90,43 @@ def replace_missing_values_with_nan(data: list) -> None:
     logger.debug("All the missing X, Y values have been replaced with NaN")
 
 
+def normalize_coordinates(data: list) -> None:
+    """Inplace normalize spherical coordinates to azimuth [0,360), polar [0,180).
+
+    The eye tracker occasionally reports values slightly outside the
+    canonical ranges (e.g. negative polar when looking past the north
+    pole, or azimuth > 360).  A negative polar angle of -2° means the
+    gaze crossed 2° past the pole, which is equivalent to polar = 2°
+    with azimuth flipped by 180°.
+
+    Transformation:
+      1. Reduce polar modulo 360 into [0, 360).
+      2. If polar is in (180, 360), reflect: polar = 360 - polar,
+         azimuth += 180.
+      3. Reduce azimuth modulo 360 into [0, 360).
+
+    NaN values are preserved.
+    """
+    for video_data in data:
+        if video_data is None:
+            continue
+        for x_ch, y_ch in [(1, 2), (4, 5)]:
+            az = video_data[x_ch]
+            pol = video_data[y_ch]
+
+            # Step 1: reduce polar into [0, 360)
+            pol[:] = pol % 360
+
+            # Step 2: reflect polar values in (180, 360) back into [0, 180)
+            reflect = pol > 180
+            if numpy.any(reflect):
+                pol[reflect] = 360 - pol[reflect]
+                az[reflect] = az[reflect] + 180
+
+            # Step 3: reduce azimuth into [0, 360)
+            az[:] = az % 360
+
+
 def fix_swapped_channel_issue(data: list) -> None:
     """Inplace handle the swapped channel issue.
     Basically "sometimes" the left_blink and right_blink
