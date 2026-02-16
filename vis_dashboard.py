@@ -65,9 +65,9 @@ def plot_gaze_heatmaps(all_data):
         ax.tick_params(labelsize=6)
 
     fig.tight_layout()
-    fig.savefig("vis5_gaze_heatmaps.png")
+    fig.savefig("images/gaze_heatmaps.png")
     plt.close(fig)
-    logger.info("Saved vis5_gaze_heatmaps.png")
+    logger.info("Saved images/gaze_heatmaps.png")
 
 
 def plot_blink_rate_over_time(all_data):
@@ -131,9 +131,9 @@ def plot_blink_rate_over_time(all_data):
         ax.set_ylabel("Blinks per minute")
         ax.legend()
         fig.tight_layout()
-        fig.savefig(f"vis5_blink_rate_{video_idx:02d}_({video_code}).png")
+        fig.savefig(f"images/blink_rate_{video_idx:02d}_({video_code}).png")
         plt.close(fig)
-        logger.info(f"Saved vis5_blink_rate_{video_idx:02d}_({video_code}).png")
+        logger.info(f"Saved images/blink_rate_{video_idx:02d}_({video_code}).png")
 
 
 def plot_vergence_boxplots(all_data):
@@ -146,12 +146,16 @@ def plot_vergence_boxplots(all_data):
             vdata = all_data[user_id][video_idx]
             if vdata is None:
                 continue
-            dx =  vdata[4] - vdata[1]  #  Right_X - Left_X
-            dy = vdata[5] - vdata[2]  #  Right_Y - Left_Y
-            valid = ~numpy.isnan(dx)
-            x_verg_per_video[video_idx].extend(dx[valid].tolist())
-            valid = ~numpy.isnan(dy)
-            y_verg_per_video[video_idx].extend(dy[valid].tolist())
+            # Horizontal vergence: great-circle distance at shared polar angle,
+            # signed by wraparound-safe azimuth difference (Right - Left)
+            pol_avg = numpy.nanmean([vdata[2], vdata[5]], axis=0)
+            h_dist = gazelib.great_circle_distance(vdata[1], pol_avg, vdata[4], pol_avg)
+            az_diff = ((vdata[4] - vdata[1] + 180) % 360) - 180
+            dx = numpy.sign(az_diff) * h_dist
+            # Vertical vergence: plain difference (polar doesn't wrap)
+            dy = vdata[2] - vdata[5]
+            x_verg_per_video[video_idx].extend(dx[~numpy.isnan(dx)].tolist())
+            y_verg_per_video[video_idx].extend(dy[~numpy.isnan(dy)].tolist())
 
     labels = [mapping.get_str_code(i, "eye") for i in range(NUM_VIDEOS)]
 
@@ -160,18 +164,18 @@ def plot_vergence_boxplots(all_data):
 
     ax1.boxplot(x_verg_per_video, showfliers=False)
     ax1.set_xticklabels(labels, rotation=45, fontsize=8)
-    ax1.set_title("Horizontal Vergence (Left_X − Right_X)")
-    ax1.set_ylabel("Raw coordinate difference")
+    ax1.set_title("Horizontal Vergence (great-circle, signed Right−Left)")
+    ax1.set_ylabel("Angular difference (deg)")
 
     ax2.boxplot(y_verg_per_video, showfliers=False)
     ax2.set_xticklabels(labels, rotation=45, fontsize=8)
     ax2.set_title("Vertical Vergence (Left_Y − Right_Y)")
-    ax2.set_ylabel("Raw coordinate difference")
+    ax2.set_ylabel("Coordinate difference (deg)")
 
     fig.tight_layout()
-    fig.savefig("vis5_vergence_boxplots.png")
+    fig.savefig("images/vergence_boxplots.png")
     plt.close(fig)
-    logger.info("Saved vis5_vergence_boxplots.png")
+    logger.info("Saved images/vergence_boxplots.png")
 
 
 def plot_vergence_per_user(all_data):
@@ -187,12 +191,16 @@ def plot_vergence_per_user(all_data):
             vdata = all_data[user_id][video_idx]
             if vdata is None:
                 continue
-            dx = vdata[1] - vdata[4]  # Left_X - Right_X
-            dy = vdata[2] - vdata[5]  # Left_Y - Right_Y
-            valid_x = ~numpy.isnan(dx)
-            valid_y = ~numpy.isnan(dy)
-            ux.append(dx[valid_x])
-            uy.append(dy[valid_y])
+            # Horizontal vergence: great-circle distance at shared polar angle,
+            # signed by wraparound-safe azimuth difference (Right - Left)
+            pol_avg = numpy.nanmean([vdata[2], vdata[5]], axis=0)
+            h_dist = gazelib.great_circle_distance(vdata[1], pol_avg, vdata[4], pol_avg)
+            az_diff = ((vdata[4] - vdata[1] + 180) % 360) - 180
+            dx = numpy.sign(az_diff) * h_dist
+            # Vertical vergence: plain difference (polar doesn't wrap)
+            dy = vdata[2] - vdata[5]
+            ux.append(dx[~numpy.isnan(dx)])
+            uy.append(dy[~numpy.isnan(dy)])
         if ux:
             x_verg_per_user.append(numpy.concatenate(ux))
             y_verg_per_user.append(numpy.concatenate(uy))
@@ -205,18 +213,18 @@ def plot_vergence_per_user(all_data):
 
     ax1.boxplot(x_verg_per_user, showfliers=False)
     ax1.set_xticklabels([str(uid) for uid in user_ids], rotation=90, fontsize=6)
-    ax1.set_title("Horizontal Vergence (Left_X − Right_X)")
-    ax1.set_ylabel("Raw coordinate difference")
+    ax1.set_title("Horizontal Vergence (great-circle, signed Right−Left)")
+    ax1.set_ylabel("Angular difference (deg)")
 
     ax2.boxplot(y_verg_per_user, showfliers=False)
     ax2.set_xticklabels([str(uid) for uid in user_ids], rotation=90, fontsize=6)
     ax2.set_title("Vertical Vergence (Left_Y − Right_Y)")
-    ax2.set_ylabel("Raw coordinate difference")
+    ax2.set_ylabel("Coordinate difference (deg)")
 
     fig.tight_layout()
-    fig.savefig("vis5_vergence_per_user.png")
+    fig.savefig("images/vergence_per_user.png")
     plt.close(fig)
-    logger.info("Saved vis5_vergence_per_user.png")
+    logger.info("Saved images/vergence_per_user.png")
 
 
 def plot_user_gaze_boxplots(all_data):
@@ -255,9 +263,9 @@ def plot_user_gaze_boxplots(all_data):
     ax2.set_title("Gaze Y (raw coordinates)")
 
     fig.tight_layout()
-    fig.savefig("vis5_user_gaze_boxplots.png")
+    fig.savefig("images/user_gaze_boxplots.png")
     plt.close(fig)
-    logger.info("Saved vis5_user_gaze_boxplots.png")
+    logger.info("Saved images/user_gaze_boxplots.png")
 
 
 def plot_velocity_histograms(all_data):
@@ -284,9 +292,9 @@ def plot_velocity_histograms(all_data):
         ax.set_xlabel("vel (deg/s)", fontsize=6)
 
     fig.tight_layout()
-    fig.savefig("vis5_velocity_histograms.png")
+    fig.savefig("images/velocity_histograms.png")
     plt.close(fig)
-    logger.info("Saved vis5_velocity_histograms.png")
+    logger.info("Saved images/velocity_histograms.png")
 
 
 def plot_gaze_percentile_bands(all_data):
@@ -332,7 +340,7 @@ def plot_gaze_percentile_bands(all_data):
             ax.set_ylabel(f"Gaze {axis_label} (degrees)")
             ax.legend()
             fig.tight_layout()
-            fname = f"vis5_gaze_{axis_label.lower()}_percentile_{video_idx:02d}_({video_code}).png"
+            fname = f"images/gaze_{axis_label.lower()}_percentile_{video_idx:02d}_({video_code}).png"
             fig.savefig(fname)
             plt.close(fig)
             logger.info(f"Saved {fname}")
